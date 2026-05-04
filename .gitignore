@@ -1,0 +1,9 @@
+ProxySync.CLI/bin
+ProxySync.Core/bin
+ProxySync.Services/bin
+ProxySync.Utils/bin
+
+ProxySync.CLI/obj
+ProxySync.Core/obj
+ProxySync.Services/obj
+ProxySync.Utils/obj

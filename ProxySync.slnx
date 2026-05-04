@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="ProxySync.CLI/ProxySync.CLI.csproj" />
+  <Project Path="ProxySync.Core/ProxySync.Core.csproj" />
+  <Project Path="ProxySync.Services/ProxySync.Services.csproj" />
+  <Project Path="ProxySync.Utils/ProxySync.Utils.csproj" />
+</Solution>

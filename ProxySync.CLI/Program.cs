@@ -2,9 +2,27 @@
 using ProxySync.Services;
 using ProxySync.Services.SystemEnvironment;
 using ProxySync.Core.Helpers;
+using Microsoft.Extensions.DependencyInjection;
 
-var configService = new ConfigService();
-var envService = new EnvironmentProxyService();
+var services = new ServiceCollection();
+
+services.AddSingleton<ConfigService>();
+
+services.AddSingleton<EnvironmentProxyService>();
+
+services.AddSingleton<ICommandRunner, CommandRunner>();
+
+services.AddSingleton<GitProxyService>();
+
+services.AddSingleton<NpmProxyService>();
+
+var serviceProvider = services.BuildServiceProvider();
+
+var configService =
+    serviceProvider.GetRequiredService<ConfigService>();
+
+var envService =
+    serviceProvider.GetRequiredService<EnvironmentProxyService>();
 
 if (args.Length > 0 && args[0] == "set")
 {
@@ -71,6 +89,62 @@ else if (args.Length >= 2 &&
          args[1] == "env")
 {
     envService.Disable();
+}
+
+else if (args.Length >= 2 &&
+         args[0] == "apply" &&
+         args[1] == "git")
+{
+    var config = configService.Load();
+
+    if (config == null)
+    {
+        Console.WriteLine("No proxy configured.");
+        return;
+    }
+
+    var gitService =
+        serviceProvider.GetRequiredService<GitProxyService>();
+
+    await gitService.ApplyAsync(config);
+}
+
+else if (args.Length >= 2 &&
+         args[0] == "disable" &&
+         args[1] == "git")
+{
+    var gitService =
+        serviceProvider.GetRequiredService<GitProxyService>();
+
+    await gitService.DisableAsync();
+}
+
+else if (args.Length >= 2 &&
+         args[0] == "apply" &&
+         args[1] == "npm")
+{
+    var config = configService.Load();
+
+    if (config == null)
+    {
+        Console.WriteLine("No proxy configured.");
+        return;
+    }
+
+    var npmService =
+        serviceProvider.GetRequiredService<NpmProxyService>();
+
+    await npmService.ApplyAsync(config);
+}
+
+else if (args.Length >= 2 &&
+         args[0] == "disable" &&
+         args[1] == "npm")
+{
+    var npmService =
+        serviceProvider.GetRequiredService<NpmProxyService>();
+
+    await npmService.DisableAsync();
 }
 
 else

@@ -1,4 +1,5 @@
 using ProxySync.Core.Models;
+using ProxySync.Core.Helpers;
 
 namespace ProxySync.Services;
 
@@ -6,7 +7,7 @@ public class EnvProxyService
 {
     public async Task ApplyAsync(ProxyConfig config)
     {
-        string proxyUrl = BuildProxyUrl(config);
+        string proxyUrl = ProxyFormatter.ToUrl(config);
 
         Environment.SetEnvironmentVariable(
             "HTTP_PROXY",
@@ -48,10 +49,5 @@ public class EnvProxyService
         Console.WriteLine("Environment proxy disabled.");
 
         await Task.CompletedTask;
-    }
-
-    private string BuildProxyUrl(ProxyConfig config)
-    {
-        return $"http://{config.Host}:{config.Port}";
     }
 }

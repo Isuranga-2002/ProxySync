@@ -7,7 +7,7 @@ using ProxySync.Services;
 // 1. Handle basic validations for args
 if (args.Length == 0)
 {
-    Console.WriteLine("Usage: proxysync [sync|disable]");
+    Console.WriteLine("Usage: proxysync [sync|disable|set]");
     return;
 }
 
@@ -31,6 +31,35 @@ try
 
     switch (command)
     {
+        case "set":
+            var setConfigService = serviceProvider.GetRequiredService<ConfigService>();
+            
+            Console.Write("Host: ");
+            var host = Console.ReadLine() ?? string.Empty;
+
+            Console.Write("Port: ");
+            int.TryParse(Console.ReadLine(), out int port);
+
+            Console.Write("Username (optional): ");
+            var username = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(username)) username = null;
+
+            Console.Write("Password (optional): ");
+            var password = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(password)) password = null;
+
+            var newConfig = new ProxyConfig
+            {
+                Host = host,
+                Port = port,
+                Username = username,
+                Password = password
+            };
+
+            setConfigService.Save(newConfig);
+            Console.WriteLine("Proxy configuration saved successfully.");
+            break;
+
         case "sync":
             var configService = serviceProvider.GetRequiredService<ConfigService>();
             var config = configService.Load();
@@ -51,7 +80,7 @@ try
 
         default:
             Console.WriteLine($"Unknown command: {command}");
-            Console.WriteLine("Supported commands: sync, disable");
+            Console.WriteLine("Supported commands: sync, disable, set");
             break;
     }
 }

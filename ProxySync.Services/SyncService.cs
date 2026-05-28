@@ -26,7 +26,7 @@ public class SyncService
         await _gitService.ApplyAsync(config);
         await _npmService.ApplyAsync(config);
 
-        Console.WriteLine("Proxy sync completed.");
+        Console.WriteLine("Proxy sync finished. Review messages above for any reported failures.");
     }
 
     public async Task DisableAllAsync()

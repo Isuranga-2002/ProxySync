@@ -38,7 +38,13 @@ try
             var host = Console.ReadLine() ?? string.Empty;
 
             Console.Write("Port: ");
-            int.TryParse(Console.ReadLine(), out int port);
+            var portInput = Console.ReadLine();
+            if (!int.TryParse(portInput, out int port) || port <= 0)
+            {
+                Console.WriteLine("Invalid port. Please enter a positive integer.");
+                Environment.ExitCode = 1;
+                return;
+            }
 
             Console.Write("Username (optional): ");
             var username = Console.ReadLine();

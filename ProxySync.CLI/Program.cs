@@ -24,23 +24,21 @@ services.AddSingleton<ConfigService>();
 
 var serviceProvider = services.BuildServiceProvider();
 var syncService = serviceProvider.GetRequiredService<SyncService>();
-
-// 3. Load the proxy configuration
 var configService = serviceProvider.GetRequiredService<ConfigService>();
-var config = configService.Load();
 
-if (config == null)
-{
-    Console.WriteLine("No proxy configuration found. Please configure a proxy first.");
-    return;
-}
-
-// 4. Handle commands properly using async/await
+// 3. Handle commands properly using async/await
 try
 {
     switch (command)
     {
         case "sync":
+            var config = configService.Load();
+            if (config == null)
+            {
+                Console.WriteLine("No proxy configuration found. Please configure a proxy first.");
+                return;
+            }
+            
             Console.WriteLine("Applying proxy settings...");
             await syncService.ApplyAllAsync(config);
             break;

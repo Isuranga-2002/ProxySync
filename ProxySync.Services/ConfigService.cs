@@ -38,7 +38,7 @@ namespace ProxySync.Services
             {
                 return JsonSerializer.Deserialize<ProxyConfig>(json);
             }
-            catch
+            catch (JsonException)
             {
                 return null;
             }

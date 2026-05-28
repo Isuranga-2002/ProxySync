@@ -1,153 +1,97 @@
-﻿using ProxySync.Core.Models;
-using ProxySync.Services;
-using ProxySync.Services.SystemEnvironment;
-using ProxySync.Core.Helpers;
+using System;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using ProxySync.Core.Models;
+using ProxySync.Services;
 
+// 1. Handle basic validations for args
+if (args.Length == 0)
+{
+    Console.WriteLine("Usage: proxysync [sync|disable|set]");
+    return;
+}
+
+string command = args[0].ToLowerInvariant();
+
+// 2. Create and initialize all required services
 var services = new ServiceCollection();
-
-services.AddSingleton<ConfigService>();
-
-services.AddSingleton<EnvironmentProxyService>();
-
 services.AddSingleton<ICommandRunner, CommandRunner>();
-
 services.AddSingleton<GitProxyService>();
-
 services.AddSingleton<NpmProxyService>();
+services.AddSingleton<EnvProxyService>();
+services.AddSingleton<SyncService>();
+services.AddSingleton<ConfigService>();
 
 var serviceProvider = services.BuildServiceProvider();
 
-var configService =
-    serviceProvider.GetRequiredService<ConfigService>();
-
-var envService =
-    serviceProvider.GetRequiredService<EnvironmentProxyService>();
-
-if (args.Length > 0 && args[0] == "set")
+// 3. Handle commands properly using async/await
+try
 {
-    Console.Write("Host: ");
-    var host = Console.ReadLine() ?? string.Empty;
+    var syncService = serviceProvider.GetRequiredService<SyncService>();
 
-    Console.Write("Port: ");
-    var port = int.Parse(Console.ReadLine() ?? "0");
-
-    Console.Write("Username (optional): ");
-    var username = Console.ReadLine();
-
-    Console.Write("Password (optional): ");
-    var password = Console.ReadLine();
-
-    var config = new ProxyConfig
+    switch (command)
     {
-        Host = host,
-        Port = port,
-        Username = username,
-        Password = password
-    };
+        case "set":
+            var setConfigService = serviceProvider.GetRequiredService<ConfigService>();
+            
+            Console.Write("Host: ");
+            var host = Console.ReadLine() ?? string.Empty;
 
-    configService.Save(config);
+            Console.Write("Port: ");
+            var portInput = Console.ReadLine();
+            if (!int.TryParse(portInput, out int port) || port <= 0)
+            {
+                Console.WriteLine("Invalid port. Please enter a positive integer.");
+                Environment.ExitCode = 1;
+                return;
+            }
 
-    Console.WriteLine("Proxy saved successfully!");
-}
+            Console.Write("Username (optional): ");
+            var username = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(username)) username = null;
 
-else if (args.Length > 0 && args[0] == "show")
-{
-    var config = configService.Load();
+            Console.Write("Password (optional): ");
+            var password = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(password)) password = null;
 
-    if (config == null)
-    {
-        Console.WriteLine("No proxy configured.");
-        return;
+            var newConfig = new ProxyConfig
+            {
+                Host = host,
+                Port = port,
+                Username = username,
+                Password = password
+            };
+
+            setConfigService.Save(newConfig);
+            Console.WriteLine("Proxy configuration saved successfully.");
+            break;
+
+        case "sync":
+            var configService = serviceProvider.GetRequiredService<ConfigService>();
+            var config = configService.Load();
+            if (config == null)
+            {
+                Console.WriteLine("No proxy configuration found. Please configure a proxy first.");
+                return;
+            }
+            
+            Console.WriteLine("Applying proxy settings...");
+            await syncService.ApplyAllAsync(config);
+            break;
+
+        case "disable":
+            Console.WriteLine("Disabling proxy settings...");
+            await syncService.DisableAllAsync();
+            break;
+
+        default:
+            Console.WriteLine($"Unknown command: {command}");
+            Console.WriteLine("Supported commands: sync, disable, set");
+            break;
     }
-
-    Console.WriteLine("Current Proxy:");
-    Console.WriteLine($"Host: {config.Host}");
-    Console.WriteLine($"Port: {config.Port}");
-    Console.WriteLine($"Username: {config.Username}");
 }
-
-else if (args.Length >= 2 &&
-         args[0] == "apply" &&
-         args[1] == "env")
+catch (Exception ex)
 {
-    var config = configService.Load();
-
-    if (config == null)
-    {
-        Console.WriteLine("No proxy configured.");
-        return;
-    }
-
-    var proxyUrl = ProxyFormatter.ToUrl(config);
-
-    envService.Apply(proxyUrl);
-}
-
-else if (args.Length >= 2 &&
-         args[0] == "disable" &&
-         args[1] == "env")
-{
-    envService.Disable();
-}
-
-else if (args.Length >= 2 &&
-         args[0] == "apply" &&
-         args[1] == "git")
-{
-    var config = configService.Load();
-
-    if (config == null)
-    {
-        Console.WriteLine("No proxy configured.");
-        return;
-    }
-
-    var gitService =
-        serviceProvider.GetRequiredService<GitProxyService>();
-
-    await gitService.ApplyAsync(config);
-}
-
-else if (args.Length >= 2 &&
-         args[0] == "disable" &&
-         args[1] == "git")
-{
-    var gitService =
-        serviceProvider.GetRequiredService<GitProxyService>();
-
-    await gitService.DisableAsync();
-}
-
-else if (args.Length >= 2 &&
-         args[0] == "apply" &&
-         args[1] == "npm")
-{
-    var config = configService.Load();
-
-    if (config == null)
-    {
-        Console.WriteLine("No proxy configured.");
-        return;
-    }
-
-    var npmService =
-        serviceProvider.GetRequiredService<NpmProxyService>();
-
-    await npmService.ApplyAsync(config);
-}
-
-else if (args.Length >= 2 &&
-         args[0] == "disable" &&
-         args[1] == "npm")
-{
-    var npmService =
-        serviceProvider.GetRequiredService<NpmProxyService>();
-
-    await npmService.DisableAsync();
-}
-
-else
-{
-    Console.WriteLine("Unknown command.");
+    Console.WriteLine($"An error occurred: {ex.Message}");
+    Environment.ExitCode = 1;
 }

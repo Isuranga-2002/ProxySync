@@ -20,18 +20,20 @@ services.AddSingleton<GitProxyService>();
 services.AddSingleton<NpmProxyService>();
 services.AddSingleton<EnvProxyService>();
 services.AddSingleton<SyncService>();
+services.AddSingleton<ConfigService>();
 
 var serviceProvider = services.BuildServiceProvider();
 var syncService = serviceProvider.GetRequiredService<SyncService>();
 
-// 3. Create a sample ProxyConfig object
-var config = new ProxyConfig
+// 3. Load the proxy configuration
+var configService = serviceProvider.GetRequiredService<ConfigService>();
+var config = configService.Load();
+
+if (config == null)
 {
-    Host = "127.0.0.1",
-    Port = 8080,
-    Username = "admin",    // Optional sample value
-    Password = "password"  // Optional sample value
-};
+    Console.WriteLine("No proxy configuration found. Please configure a proxy first.");
+    return;
+}
 
 // 4. Handle commands properly using async/await
 try

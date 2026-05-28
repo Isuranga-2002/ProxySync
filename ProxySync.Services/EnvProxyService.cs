@@ -5,48 +5,21 @@ namespace ProxySync.Services;
 
 public class EnvProxyService
 {
+    private readonly ProxySync.Services.SystemEnvironment.EnvironmentProxyService _environmentProxyService =
+        new ProxySync.Services.SystemEnvironment.EnvironmentProxyService();
+
     public async Task ApplyAsync(ProxyConfig config)
     {
         string proxyUrl = ProxyFormatter.ToUrl(config);
 
-        Environment.SetEnvironmentVariable(
-            "HTTP_PROXY",
-            proxyUrl,
-            EnvironmentVariableTarget.User);
-
-        Environment.SetEnvironmentVariable(
-            "HTTPS_PROXY",
-            proxyUrl,
-            EnvironmentVariableTarget.User);
-
-        Environment.SetEnvironmentVariable(
-            "ALL_PROXY",
-            proxyUrl,
-            EnvironmentVariableTarget.User);
-
-        Console.WriteLine("Environment proxy applied.");
+        _environmentProxyService.Apply(proxyUrl);
 
         await Task.CompletedTask;
     }
 
     public async Task DisableAsync()
     {
-        Environment.SetEnvironmentVariable(
-            "HTTP_PROXY",
-            null,
-            EnvironmentVariableTarget.User);
-
-        Environment.SetEnvironmentVariable(
-            "HTTPS_PROXY",
-            null,
-            EnvironmentVariableTarget.User);
-
-        Environment.SetEnvironmentVariable(
-            "ALL_PROXY",
-            null,
-            EnvironmentVariableTarget.User);
-
-        Console.WriteLine("Environment proxy disabled.");
+        _environmentProxyService.Disable();
 
         await Task.CompletedTask;
     }

@@ -34,7 +34,14 @@ namespace ProxySync.Services
                 return null;
 
             var json = File.ReadAllText(configPath);
-            return JsonSerializer.Deserialize<ProxyConfig>(json);
+            try
+            {
+                return JsonSerializer.Deserialize<ProxyConfig>(json);
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
         }
     }
 }

@@ -18,6 +18,11 @@ public class EnvProxyService
             proxyUrl,
             EnvironmentVariableTarget.User);
 
+        Environment.SetEnvironmentVariable(
+            "ALL_PROXY",
+            proxyUrl,
+            EnvironmentVariableTarget.User);
+
         Console.WriteLine("Environment proxy applied.");
 
         await Task.CompletedTask;
@@ -32,6 +37,11 @@ public class EnvProxyService
 
         Environment.SetEnvironmentVariable(
             "HTTPS_PROXY",
+            null,
+            EnvironmentVariableTarget.User);
+
+        Environment.SetEnvironmentVariable(
+            "ALL_PROXY",
             null,
             EnvironmentVariableTarget.User);
 

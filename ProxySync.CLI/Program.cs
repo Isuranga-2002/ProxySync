@@ -23,15 +23,16 @@ services.AddSingleton<SyncService>();
 services.AddSingleton<ConfigService>();
 
 var serviceProvider = services.BuildServiceProvider();
-var syncService = serviceProvider.GetRequiredService<SyncService>();
-var configService = serviceProvider.GetRequiredService<ConfigService>();
 
 // 3. Handle commands properly using async/await
 try
 {
+    var syncService = serviceProvider.GetRequiredService<SyncService>();
+
     switch (command)
     {
         case "sync":
+            var configService = serviceProvider.GetRequiredService<ConfigService>();
             var config = configService.Load();
             if (config == null)
             {

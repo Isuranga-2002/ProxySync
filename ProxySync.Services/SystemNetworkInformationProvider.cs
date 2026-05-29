@@ -11,27 +11,29 @@ public class SystemNetworkInformationProvider : INetworkInformationProvider
         string? localIpAddress = null;
         string? defaultGatewayAddress = null;
 
-        foreach (var networkInterface in NetworkInterface.GetAllNetworkInterfaces())
-        {
-            if (networkInterface.OperationalStatus != OperationalStatus.Up)
-                continue;
+            foreach (var networkInterface in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (networkInterface.OperationalStatus != OperationalStatus.Up)
+                    continue;
 
-            var properties = networkInterface.GetIPProperties();
+                var properties = networkInterface.GetIPProperties();
 
-            defaultGatewayAddress ??= properties.GatewayAddresses
-                .Select(address => address.Address)
-                .FirstOrDefault(address => address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.Any.Equals(address))
-                ?.ToString();
+                var gateway = properties.GatewayAddresses
+                    .Select(address => address.Address)
+                    .FirstOrDefault(address => address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.Any.Equals(address))
+                    ?.ToString();
 
-            localIpAddress ??= properties.UnicastAddresses
-                .Select(address => address.Address)
-                .FirstOrDefault(address => address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(address))
-                ?.ToString();
+                var localIp = properties.UnicastAddresses
+                    .Select(address => address.Address)
+                    .FirstOrDefault(address => address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(address))
+                    ?.ToString();
 
-            if (localIpAddress != null && defaultGatewayAddress != null)
-                break;
-        }
+                if (localIp != null && gateway != null)
+                    return Task.FromResult(new NetworkSnapshot(localIp, gateway));
 
-        return Task.FromResult(new NetworkSnapshot(localIpAddress, defaultGatewayAddress));
-    }
+                localIpAddress ??= localIp;
+                defaultGatewayAddress ??= gateway;
+            }
+
+            return Task.FromResult(new NetworkSnapshot(localIpAddress, defaultGatewayAddress));
 }

@@ -7,7 +7,7 @@ using ProxySync.Services;
 // 1. Handle basic validations for args
 if (args.Length == 0)
 {
-    Console.WriteLine("Usage: proxysync [sync|disable|set]");
+    Console.WriteLine("Usage: proxysync [sync|disable|set|profile]");
     return;
 }
 
@@ -124,6 +124,8 @@ try
                     break;
 
                 case "list":
+                    try
+                    {
                         var profiles = (await profileService.ListProfilesAsync()).ToList();
                         var doc = await profileService.LoadAsync();
                         var activeName = doc.ActiveProfile;
@@ -147,6 +149,11 @@ try
                                 }
                             }
                         }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to list profiles: {ex.Message}");
+                    }
                     break;
 
                 case "switch":
@@ -157,11 +164,18 @@ try
                     }
 
                     var switchName = args[2];
-                    var ok = await profileService.SwitchActiveProfileAsync(switchName);
-                    if (ok)
-                        Console.WriteLine($"Active profile set to '{switchName}'.");
-                    else
-                        Console.WriteLine($"Profile '{switchName}' not found.");
+                    try
+                    {
+                        var ok = await profileService.SwitchActiveProfileAsync(switchName);
+                        if (ok)
+                            Console.WriteLine($"Active profile set to '{switchName}'.");
+                        else
+                            Console.WriteLine($"Profile '{switchName}' not found.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to switch profile: {ex.Message}");
+                    }
 
                     break;
 
@@ -207,24 +221,46 @@ try
 
         case "sync":
             var profileServiceForSync = serviceProvider.GetRequiredService<ProfileService>();
-            var activeProfile = await profileServiceForSync.GetActiveProfileAsync();
-
-            if (activeProfile == null)
+            ProxyConfig configToUse = null;
+            try
             {
-                Console.WriteLine("No active profile found. Please add a profile and set it active using 'proxysync profile add <name>' and 'proxysync profile switch <name>'.");
+                var activeProfile = await profileServiceForSync.GetActiveProfileAsync();
+                if (activeProfile != null)
+                {
+                    configToUse = new ProxyConfig
+                    {
+                        Host = activeProfile.Host,
+                        Port = activeProfile.Port,
+                        Username = null,
+                        Password = null
+                    };
+
+                    Console.WriteLine($"Applying proxy settings from profile '{activeProfile.Name}'...");
+                }
+                else
+                {
+                    // Fallback to legacy config.json
+                    var configService = serviceProvider.GetRequiredService<ConfigService>();
+                    var legacyConfig = configService.Load();
+                    if (legacyConfig != null)
+                    {
+                        Console.WriteLine("No active profile found. Using legacy configuration from config.json...");
+                        configToUse = legacyConfig;
+                    }
+                    else
+                    {
+                        Console.WriteLine("No active profile found and no legacy configuration present. Please add a profile or run 'set' to create legacy config.");
+                        return;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to load profile configuration: {ex.Message}");
                 return;
             }
 
-            var configFromProfile = new ProxyConfig
-            {
-                Host = activeProfile.Host,
-                Port = activeProfile.Port,
-                Username = null,
-                Password = null
-            };
-
-            Console.WriteLine($"Applying proxy settings from profile '{activeProfile.Name}'...");
-            await syncService.ApplyAllAsync(configFromProfile);
+            await syncService.ApplyAllAsync(configToUse);
             break;
 
         case "disable":

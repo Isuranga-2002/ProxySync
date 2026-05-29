@@ -31,53 +31,30 @@ public class ProfileService
             await SaveAsync(empty);
             return empty;
         }
-        try
+        // When the file exists, reading/parsing errors should surface to the caller
+        // so that we do not accidentally overwrite or discard valid data.
+        var json = await File.ReadAllTextAsync(configPath);
+        var doc = JsonSerializer.Deserialize<ProfileConfiguration>(json);
+        if (doc == null) return new ProfileConfiguration();
+
+        // Ensure profiles dictionary is not null and uses case-insensitive keys.
+        if (doc.Profiles == null)
         {
-            var json = await File.ReadAllTextAsync(configPath);
-            var doc = JsonSerializer.Deserialize<ProfileConfiguration>(json);
-            if (doc == null) return new ProfileConfiguration();
-
-            // Ensure profiles dictionary is not null and uses case-insensitive keys.
-            if (doc.Profiles == null)
-            {
-                doc.Profiles = new Dictionary<string, ProxyProfile>(StringComparer.OrdinalIgnoreCase);
-            }
-            else if (doc.Profiles.Comparer != StringComparer.OrdinalIgnoreCase)
-            {
-                var normalized = new Dictionary<string, ProxyProfile>(StringComparer.OrdinalIgnoreCase);
-                foreach (var kv in doc.Profiles)
-                {
-                    if (kv.Key == null) continue;
-                    normalized[kv.Key] = kv.Value;
-                }
-
-                doc.Profiles = normalized;
-            }
-
-            return doc;
+            doc.Profiles = new Dictionary<string, ProxyProfile>(StringComparer.OrdinalIgnoreCase);
         }
-        catch (JsonException)
+        else if (doc.Profiles.Comparer != StringComparer.OrdinalIgnoreCase)
         {
-            // If file is corrupt, back it up and return an empty configuration to avoid crashes.
-            try
+            var normalized = new Dictionary<string, ProxyProfile>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in doc.Profiles)
             {
-                var backup = configPath + ".corrupt." + DateTime.UtcNow.ToString("yyyyMMddHHmmss") + ".bak";
-                File.Move(configPath, backup);
-            }
-            catch
-            {
-                // ignore backup failures
+                if (kv.Key == null) continue;
+                normalized[kv.Key] = kv.Value;
             }
 
-            var empty = new ProfileConfiguration();
-            await SaveAsync(empty);
-            return empty;
+            doc.Profiles = normalized;
         }
-        catch (IOException)
-        {
-            // IO problems reading the file — return an empty configuration to keep behavior safe.
-            return new ProfileConfiguration();
-        }
+
+        return doc;
     }
 
     public async Task SaveAsync(ProfileConfiguration configuration)

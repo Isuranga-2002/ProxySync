@@ -31,10 +31,9 @@ public class ProfileService
             await SaveAsync(empty);
             return empty;
         }
-
-        var json = await File.ReadAllTextAsync(configPath);
         try
         {
+            var json = await File.ReadAllTextAsync(configPath);
             var doc = JsonSerializer.Deserialize<ProfileConfiguration>(json);
             if (doc == null) return new ProfileConfiguration();
             if (doc.Profiles == null)
@@ -43,7 +42,24 @@ public class ProfileService
         }
         catch (JsonException)
         {
-            // If file is corrupt, return an empty configuration to avoid crashes.
+            // If file is corrupt, back it up and return an empty configuration to avoid crashes.
+            try
+            {
+                var backup = configPath + ".corrupt." + DateTime.UtcNow.ToString("yyyyMMddHHmmss") + ".bak";
+                File.Move(configPath, backup);
+            }
+            catch
+            {
+                // ignore backup failures
+            }
+
+            var empty = new ProfileConfiguration();
+            await SaveAsync(empty);
+            return empty;
+        }
+        catch (IOException)
+        {
+            // IO problems reading the file — return an empty configuration to keep behavior safe.
             return new ProfileConfiguration();
         }
     }
@@ -54,21 +70,42 @@ public class ProfileService
         {
             WriteIndented = true
         };
-
         var json = JsonSerializer.Serialize(configuration, options);
 
-        // Atomic write: write to temp file then replace
-        var tmp = configPath + ".tmp";
-        await File.WriteAllTextAsync(tmp, json);
+        // Ensure directory exists
+        var dir = Path.GetDirectoryName(configPath);
+        if (!string.IsNullOrEmpty(dir))
+            Directory.CreateDirectory(dir);
 
+        // Atomic write: write to a unique temp file then move/replace
+        var tmp = Path.Combine(dir ?? Path.GetTempPath(), Path.GetRandomFileName());
         try
         {
-            File.Copy(tmp, configPath, true);
-            File.Delete(tmp);
+            await File.WriteAllTextAsync(tmp, json);
+
+            if (File.Exists(configPath))
+            {
+                // Replace existing file atomically
+                try
+                {
+                    File.Replace(tmp, configPath, null);
+                }
+                catch
+                {
+                    // Fallback to overwrite if Replace fails
+                    File.Copy(tmp, configPath, true);
+                    File.Delete(tmp);
+                }
+            }
+            else
+            {
+                File.Move(tmp, configPath);
+            }
         }
-        catch
+        finally
         {
-            // Best-effort cleanup; swallow to keep API simple.
+            // Ensure temp file is removed if it still exists
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
         }
     }
 

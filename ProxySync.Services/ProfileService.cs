@@ -36,8 +36,24 @@ public class ProfileService
             var json = await File.ReadAllTextAsync(configPath);
             var doc = JsonSerializer.Deserialize<ProfileConfiguration>(json);
             if (doc == null) return new ProfileConfiguration();
+
+            // Ensure profiles dictionary is not null and uses case-insensitive keys.
             if (doc.Profiles == null)
-                doc.Profiles = new Dictionary<string, ProxyProfile>();
+            {
+                doc.Profiles = new Dictionary<string, ProxyProfile>(StringComparer.OrdinalIgnoreCase);
+            }
+            else if (doc.Profiles.Comparer != StringComparer.OrdinalIgnoreCase)
+            {
+                var normalized = new Dictionary<string, ProxyProfile>(StringComparer.OrdinalIgnoreCase);
+                foreach (var kv in doc.Profiles)
+                {
+                    if (kv.Key == null) continue;
+                    normalized[kv.Key] = kv.Value;
+                }
+
+                doc.Profiles = normalized;
+            }
+
             return doc;
         }
         catch (JsonException)
@@ -113,15 +129,29 @@ public class ProfileService
     {
         if (profile == null) throw new ArgumentNullException(nameof(profile));
 
+        // Basic validation
+        var name = profile.Name?.Trim();
+        if (string.IsNullOrEmpty(name))
+            throw new ArgumentException("Profile name is required.", nameof(profile));
+
+        if (name.IndexOfAny(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }) >= 0)
+            throw new ArgumentException("Profile name contains invalid path characters.", nameof(profile));
+
+        if (string.IsNullOrWhiteSpace(profile.Host))
+            throw new ArgumentException("Profile host is required.", nameof(profile));
+
+        if (profile.Port <= 0 || profile.Port > 65535)
+            throw new ArgumentException("Profile port must be a positive integer between 1 and 65535.", nameof(profile));
+
         var doc = await LoadAsync();
         if (doc.Profiles == null)
-            doc.Profiles = new Dictionary<string, ProxyProfile>();
+            doc.Profiles = new Dictionary<string, ProxyProfile>(StringComparer.OrdinalIgnoreCase);
 
-        doc.Profiles[profile.Name] = profile;
+        doc.Profiles[name] = new ProxyProfile { Name = name, Host = profile.Host, Port = profile.Port };
 
         // If there is no active profile, set this as active.
         if (string.IsNullOrEmpty(doc.ActiveProfile))
-            doc.ActiveProfile = profile.Name;
+            doc.ActiveProfile = name;
 
         await SaveAsync(doc);
     }

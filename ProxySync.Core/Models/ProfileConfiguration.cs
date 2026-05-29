@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace ProxySync.Core.Models
@@ -6,6 +7,6 @@ namespace ProxySync.Core.Models
     {
         public string? ActiveProfile { get; set; }
 
-        public required Dictionary<string, ProxyProfile> Profiles { get; set; } = new Dictionary<string, ProxyProfile>();
+        public Dictionary<string, ProxyProfile> Profiles { get; set; } = new Dictionary<string, ProxyProfile>(StringComparer.OrdinalIgnoreCase);
     }
 }

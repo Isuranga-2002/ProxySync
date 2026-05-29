@@ -21,6 +21,7 @@ services.AddSingleton<NpmProxyService>();
 services.AddSingleton<EnvProxyService>();
 services.AddSingleton<SyncService>();
 services.AddSingleton<ConfigService>();
+services.AddSingleton<ProfileService>();
 
 var serviceProvider = services.BuildServiceProvider();
 
@@ -29,22 +30,160 @@ try
 {
     var syncService = serviceProvider.GetRequiredService<SyncService>();
 
+    // Local helpers to reduce duplicated console parsing logic
+    static string ReadHostFromConsole()
+    {
+        Console.Write("Host: ");
+        return Console.ReadLine() ?? string.Empty;
+    }
+
+    static int? ReadPortFromConsole()
+    {
+        Console.Write("Port: ");
+        var portInputLocal = Console.ReadLine();
+        if (!int.TryParse(portInputLocal, out int p)) return null;
+        return p;
+    }
+
     switch (command)
     {
+        case "profile":
+        {
+            // profile subcommands: add <name>, list, switch <name>
+            if (args.Length < 2)
+            {
+                Console.WriteLine("Usage: proxysync profile [add|list|switch] [name]");
+                return;
+            }
+
+            var profileService = serviceProvider.GetRequiredService<ProfileService>();
+            var sub = args[1].ToLowerInvariant();
+
+            switch (sub)
+            {
+                case "add":
+                    if (args.Length < 3)
+                    {
+                        Console.WriteLine("Usage: proxysync profile add <name>");
+                        return;
+                    }
+
+                    var name = args[2];
+
+                    var hostInput = ReadHostFromConsole();
+                    var portProfileNullable = ReadPortFromConsole();
+                    if (!portProfileNullable.HasValue || portProfileNullable.Value <= 0)
+                    {
+                        Console.WriteLine("Invalid port. Please enter a positive integer.");
+                        Environment.ExitCode = 1;
+                        return;
+                    }
+                    var portProfile = portProfileNullable.Value;
+
+                    // Validate inputs before attempting to add
+                    if (string.IsNullOrWhiteSpace(name))
+                    {
+                        Console.WriteLine("Profile name is required.");
+                        return;
+                    }
+
+                    if (name.IndexOfAny(new[] { System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar }) >= 0)
+                    {
+                        Console.WriteLine("Profile name contains invalid characters.");
+                        return;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(hostInput))
+                    {
+                        Console.WriteLine("Host is required.");
+                        return;
+                    }
+
+                    if (portProfile <= 0 || portProfile > 65535)
+                    {
+                        Console.WriteLine("Port must be between 1 and 65535.");
+                        return;
+                    }
+
+                    var newProfile = new ProxyProfile
+                    {
+                        Name = name,
+                        Host = hostInput,
+                        Port = portProfile
+                    };
+
+                    try
+                    {
+                        await profileService.AddProfileAsync(newProfile);
+                        Console.WriteLine($"Profile '{name}' added.");
+                    }
+                    catch (ArgumentException ae)
+                    {
+                        Console.WriteLine($"Failed to add profile: {ae.Message}");
+                    }
+                    break;
+
+                case "list":
+                        var profiles = (await profileService.ListProfilesAsync()).ToList();
+                        var doc = await profileService.LoadAsync();
+                        var activeName = doc.ActiveProfile;
+
+                        Console.WriteLine("Profiles:");
+                        if (!profiles.Any())
+                        {
+                            Console.WriteLine("  (no profiles)");
+                        }
+                        else
+                        {
+                            foreach (var p in profiles)
+                            {
+                                if (!string.IsNullOrEmpty(activeName) && string.Equals(p.Name, activeName, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    Console.WriteLine($"* {p.Name}");
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"  {p.Name}");
+                                }
+                            }
+                        }
+                    break;
+
+                case "switch":
+                    if (args.Length < 3)
+                    {
+                        Console.WriteLine("Usage: proxysync profile switch <name>");
+                        return;
+                    }
+
+                    var switchName = args[2];
+                    var ok = await profileService.SwitchActiveProfileAsync(switchName);
+                    if (ok)
+                        Console.WriteLine($"Active profile set to '{switchName}'.");
+                    else
+                        Console.WriteLine($"Profile '{switchName}' not found.");
+
+                    break;
+
+                default:
+                    Console.WriteLine("Unknown profile command. Supported: add, list, switch");
+                    break;
+            }
+
+            break;
+        }
         case "set":
             var setConfigService = serviceProvider.GetRequiredService<ConfigService>();
-            
-            Console.Write("Host: ");
-            var host = Console.ReadLine() ?? string.Empty;
 
-            Console.Write("Port: ");
-            var portInput = Console.ReadLine();
-            if (!int.TryParse(portInput, out int port) || port <= 0)
+            var host = ReadHostFromConsole();
+            var portNullable = ReadPortFromConsole();
+            if (!portNullable.HasValue || portNullable.Value <= 0)
             {
                 Console.WriteLine("Invalid port. Please enter a positive integer.");
                 Environment.ExitCode = 1;
                 return;
             }
+            var port = portNullable.Value;
 
             Console.Write("Username (optional): ");
             var username = Console.ReadLine();
@@ -67,16 +206,25 @@ try
             break;
 
         case "sync":
-            var configService = serviceProvider.GetRequiredService<ConfigService>();
-            var config = configService.Load();
-            if (config == null)
+            var profileServiceForSync = serviceProvider.GetRequiredService<ProfileService>();
+            var activeProfile = await profileServiceForSync.GetActiveProfileAsync();
+
+            if (activeProfile == null)
             {
-                Console.WriteLine("No proxy configuration found. Please configure a proxy first.");
+                Console.WriteLine("No active profile found. Please add a profile and set it active using 'proxysync profile add <name>' and 'proxysync profile switch <name>'.");
                 return;
             }
-            
-            Console.WriteLine("Applying proxy settings...");
-            await syncService.ApplyAllAsync(config);
+
+            var configFromProfile = new ProxyConfig
+            {
+                Host = activeProfile.Host,
+                Port = activeProfile.Port,
+                Username = null,
+                Password = null
+            };
+
+            Console.WriteLine($"Applying proxy settings from profile '{activeProfile.Name}'...");
+            await syncService.ApplyAllAsync(configFromProfile);
             break;
 
         case "disable":

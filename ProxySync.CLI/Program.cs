@@ -5,9 +5,15 @@ using ProxySync.Core.Models;
 using ProxySync.Services;
 
 // 1. Handle basic validations for args
-if (args.Length == 0)
+static void PrintUsage()
 {
     Console.WriteLine("Usage: proxysync [sync|disable|set|profile]");
+    Console.WriteLine("Profile commands: profile add <name> | profile list | profile switch <name>");
+}
+
+if (args.Length == 0)
+{
+    PrintUsage();
     return;
 }
 
@@ -221,7 +227,7 @@ try
 
         case "sync":
             var profileServiceForSync = serviceProvider.GetRequiredService<ProfileService>();
-            ProxyConfig configToUse = null;
+            ProxyConfig? configToUse = null;
             try
             {
                 var activeProfile = await profileServiceForSync.GetActiveProfileAsync();
@@ -270,7 +276,7 @@ try
 
         default:
             Console.WriteLine($"Unknown command: {command}");
-            Console.WriteLine("Supported commands: sync, disable, set");
+            PrintUsage();
             break;
     }
 }

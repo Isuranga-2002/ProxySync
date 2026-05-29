@@ -31,30 +31,56 @@ public class ProfileService
             await SaveAsync(empty);
             return empty;
         }
-        // When the file exists, reading/parsing errors should surface to the caller
-        // so that we do not accidentally overwrite or discard valid data.
-        var json = await File.ReadAllTextAsync(configPath);
-        var doc = JsonSerializer.Deserialize<ProfileConfiguration>(json);
-        if (doc == null) return new ProfileConfiguration();
+        try
+        {
+            var json = await File.ReadAllTextAsync(configPath);
+            var doc = JsonSerializer.Deserialize<ProfileConfiguration>(json);
+            if (doc == null)
+                throw new JsonException("profiles.json could not be deserialized into a ProfileConfiguration.");
 
-        // Ensure profiles dictionary is not null and uses case-insensitive keys.
-        if (doc.Profiles == null)
-        {
-            doc.Profiles = new Dictionary<string, ProxyProfile>(StringComparer.OrdinalIgnoreCase);
-        }
-        else if (doc.Profiles.Comparer != StringComparer.OrdinalIgnoreCase)
-        {
-            var normalized = new Dictionary<string, ProxyProfile>(StringComparer.OrdinalIgnoreCase);
-            foreach (var kv in doc.Profiles)
+            // Ensure profiles dictionary is not null and uses case-insensitive keys.
+            if (doc.Profiles == null)
             {
-                if (kv.Key == null) continue;
-                normalized[kv.Key] = kv.Value;
+                doc.Profiles = new Dictionary<string, ProxyProfile>(StringComparer.OrdinalIgnoreCase);
+            }
+            else if (doc.Profiles.Comparer != StringComparer.OrdinalIgnoreCase)
+            {
+                var normalized = new Dictionary<string, ProxyProfile>(StringComparer.OrdinalIgnoreCase);
+                foreach (var kv in doc.Profiles)
+                {
+                    if (kv.Key == null) continue;
+                    normalized[kv.Key] = kv.Value;
+                }
+
+                doc.Profiles = normalized;
             }
 
-            doc.Profiles = normalized;
+            return doc;
         }
+        catch (JsonException ex)
+        {
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+            var backupPath = configPath + ".corrupt." + timestamp + ".bak";
 
-        return doc;
+            try
+            {
+                File.Move(configPath, backupPath);
+                Console.WriteLine($"Warning: detected invalid profiles.json. Backed up corrupted file to '{Path.GetFileName(backupPath)}' and created a fresh profiles.json.");
+
+                var empty = new ProfileConfiguration();
+                await SaveAsync(empty);
+                return empty;
+            }
+            catch (IOException)
+            {
+                // Preserve the original exception chain if the recovery move fails.
+                throw new IOException("Unable to recover corrupted profiles.json.", ex);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                throw;
+            }
+        }
     }
 
     public async Task SaveAsync(ProfileConfiguration configuration)
@@ -70,7 +96,10 @@ public class ProfileService
         if (!string.IsNullOrEmpty(dir))
             Directory.CreateDirectory(dir);
 
-        // Atomic write: write to a unique temp file then move/replace
+        // Atomic write: write to a unique temp file then replace via rename/move semantics.
+        // Copy/delete fallback is intentionally avoided because it can leave a partially
+        // written destination if the process crashes mid-copy. Renaming the fully written
+        // temp file into place preserves the safest behavior the platform allows.
         var tmp = Path.Combine(dir ?? Path.GetTempPath(), Path.GetRandomFileName());
         try
         {
@@ -78,16 +107,22 @@ public class ProfileService
 
             if (File.Exists(configPath))
             {
-                // Replace existing file atomically
+                // Prefer File.Replace when available because it performs an atomic swap.
                 try
                 {
                     File.Replace(tmp, configPath, null);
                 }
-                catch
+                catch (IOException)
                 {
-                    // Fallback to overwrite if Replace fails
-                    File.Copy(tmp, configPath, true);
-                    File.Delete(tmp);
+                    // If Replace cannot be used, fall back to a rename/move-based swap.
+                    // This is safer than copy/delete because the destination is only
+                    // replaced with the already-complete temp file.
+                    File.Move(tmp, configPath, true);
+                }
+                catch (PlatformNotSupportedException)
+                {
+                    // Some platforms do not support Replace; use move-overwrite semantics.
+                    File.Move(tmp, configPath, true);
                 }
             }
             else

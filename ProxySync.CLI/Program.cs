@@ -7,8 +7,9 @@ using ProxySync.Services;
 // 1. Handle basic validations for args
 static void PrintUsage()
 {
-    Console.WriteLine("Usage: proxysync [sync|disable|set|profile]");
+    Console.WriteLine("Usage: proxysync [on|off|sync|disable|set|profile|detect|auto-switch]");
     Console.WriteLine("Profile commands: profile add <name> | profile list | profile switch <name>");
+    Console.WriteLine("Automation commands: on | off | detect | auto-switch");
 }
 
 if (args.Length == 0)
@@ -22,19 +23,24 @@ string command = args[0].ToLowerInvariant();
 // 2. Create and initialize all required services
 var services = new ServiceCollection();
 services.AddSingleton<ICommandRunner, CommandRunner>();
+services.AddSingleton<ISyncService, SyncService>();
 services.AddSingleton<GitProxyService>();
 services.AddSingleton<NpmProxyService>();
 services.AddSingleton<EnvProxyService>();
-services.AddSingleton<SyncService>();
+services.AddSingleton<IProfileService, ProfileService>();
+services.AddSingleton<INetworkInformationProvider, SystemNetworkInformationProvider>();
+services.AddSingleton<INetworkDetectionService, NetworkDetectionService>();
+services.AddSingleton<IAutomationService, AutomationService>();
 services.AddSingleton<ConfigService>();
-services.AddSingleton<ProfileService>();
 
 var serviceProvider = services.BuildServiceProvider();
 
 // 3. Handle commands properly using async/await
 try
 {
-    var syncService = serviceProvider.GetRequiredService<SyncService>();
+    var syncService = serviceProvider.GetRequiredService<ISyncService>();
+    var profileService = serviceProvider.GetRequiredService<IProfileService>();
+    var automationService = serviceProvider.GetRequiredService<IAutomationService>();
 
     // Local helpers to reduce duplicated console parsing logic
     static string ReadHostFromConsole()
@@ -62,7 +68,6 @@ try
                 return;
             }
 
-            var profileService = serviceProvider.GetRequiredService<ProfileService>();
             var sub = args[1].ToLowerInvariant();
 
             switch (sub)
@@ -85,6 +90,9 @@ try
                         return;
                     }
                     var portProfile = portProfileNullable.Value;
+
+                    Console.Write("Network identifier (optional): ");
+                    var networkIdentifier = Console.ReadLine();
 
                     // Validate inputs before attempting to add
                     if (string.IsNullOrWhiteSpace(name))
@@ -115,7 +123,8 @@ try
                     {
                         Name = name,
                         Host = hostInput,
-                        Port = portProfile
+                        Port = portProfile,
+                        NetworkIdentifier = string.IsNullOrWhiteSpace(networkIdentifier) ? null : networkIdentifier.Trim()
                     };
 
                     try
@@ -192,6 +201,74 @@ try
 
             break;
         }
+        case "on":
+        {
+            try
+            {
+                var result = await automationService.EnableAsync();
+                Console.WriteLine(result.Message);
+                if (!result.Success)
+                    Environment.ExitCode = 1;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to enable proxy: {ex.Message}");
+                Environment.ExitCode = 1;
+            }
+
+            break;
+        }
+        case "off":
+        {
+            try
+            {
+                var result = await automationService.DisableAsync();
+                Console.WriteLine(result.Message);
+                if (!result.Success)
+                    Environment.ExitCode = 1;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to disable proxy: {ex.Message}");
+                Environment.ExitCode = 1;
+            }
+
+            break;
+        }
+        case "detect":
+        {
+            try
+            {
+                var result = await automationService.DetectAsync();
+                Console.WriteLine(result.Message);
+                if (!result.Success)
+                    Environment.ExitCode = 1;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to detect network: {ex.Message}");
+                Environment.ExitCode = 1;
+            }
+
+            break;
+        }
+        case "auto-switch":
+        {
+            try
+            {
+                var result = await automationService.AutoSwitchAsync();
+                Console.WriteLine(result.Message);
+                if (!result.Success)
+                    Environment.ExitCode = 1;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to auto-switch profile: {ex.Message}");
+                Environment.ExitCode = 1;
+            }
+
+            break;
+        }
         case "set":
             var setConfigService = serviceProvider.GetRequiredService<ConfigService>();
 
@@ -226,11 +303,10 @@ try
             break;
 
         case "sync":
-            var profileServiceForSync = serviceProvider.GetRequiredService<ProfileService>();
             ProxyConfig? configToUse = null;
             try
             {
-                var activeProfile = await profileServiceForSync.GetActiveProfileAsync();
+                var activeProfile = await profileService.GetActiveProfileAsync();
                 if (activeProfile != null)
                 {
                     configToUse = new ProxyConfig

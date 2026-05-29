@@ -7,5 +7,7 @@ namespace ProxySync.Core.Models
         public required string Host { get; set; }
 
         public required int Port { get; set; }
+
+        public string? NetworkIdentifier { get; set; }
     }
 }

@@ -2,7 +2,7 @@ using ProxySync.Core.Models;
 
 namespace ProxySync.Services;
 
-public class SyncService
+public class SyncService : ISyncService
 {
     private readonly EnvProxyService _envService;
     private readonly GitProxyService _gitService;

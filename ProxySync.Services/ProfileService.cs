@@ -8,19 +8,30 @@ using ProxySync.Core.Models;
 
 namespace ProxySync.Services;
 
-public class ProfileService
+public class ProfileService : IProfileService
 {
     private readonly string configPath;
 
-    public ProfileService()
+    public ProfileService(string? configPath = null)
     {
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".proxysync"
-        );
+        if (string.IsNullOrWhiteSpace(configPath))
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".proxysync"
+            );
 
-        Directory.CreateDirectory(dir);
-        configPath = Path.Combine(dir, "profiles.json");
+            Directory.CreateDirectory(dir);
+            this.configPath = Path.Combine(dir, "profiles.json");
+        }
+        else
+        {
+            var dir = Path.GetDirectoryName(configPath);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
+
+            this.configPath = configPath;
+        }
     }
 
     public async Task<ProfileConfiguration> LoadAsync()
@@ -59,17 +70,17 @@ public class ProfileService
         }
         catch (JsonException ex)
         {
-            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+                var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
             var backupPath = configPath + ".corrupt." + timestamp + ".bak";
 
             try
             {
                 File.Move(configPath, backupPath);
-                Console.WriteLine($"Warning: detected invalid profiles.json. Backed up corrupted file to '{Path.GetFileName(backupPath)}' and created a fresh profiles.json.");
+                    Console.WriteLine($"Warning: detected invalid profiles.json. Backed up corrupted file to '{Path.GetFileName(backupPath)}' and created a fresh profiles.json.");
 
-                var empty = new ProfileConfiguration();
-                await SaveAsync(empty);
-                return empty;
+                    var empty = new ProfileConfiguration();
+                    await SaveAsync(empty);
+                    return empty;
             }
             catch (IOException)
             {
@@ -160,6 +171,7 @@ public class ProfileService
             doc.Profiles = new Dictionary<string, ProxyProfile>(StringComparer.OrdinalIgnoreCase);
 
         doc.Profiles[name] = new ProxyProfile { Name = name, Host = profile.Host, Port = profile.Port };
+        doc.Profiles[name].NetworkIdentifier = profile.NetworkIdentifier?.Trim();
 
         // If there is no active profile, set this as active.
         if (string.IsNullOrEmpty(doc.ActiveProfile))

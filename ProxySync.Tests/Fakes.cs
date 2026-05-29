@@ -1,4 +1,5 @@
 using ProxySync.Core.Models;
+using ProxySync.Services;
 
 namespace ProxySync.Tests;
 

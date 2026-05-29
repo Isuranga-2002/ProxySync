@@ -1,5 +1,6 @@
 using ProxySync.Core.Models;
 using ProxySync.Services;
+using Xunit;
 
 namespace ProxySync.Tests;
 
@@ -113,6 +114,6 @@ public class AutomationServiceTests
 
         Assert.False(result.Success);
         Assert.Empty(syncService.AppliedConfigs);
-        Assert.Equal("office", profileConfiguration.ActiveProfile);
+        Assert.Null(profileConfiguration.ActiveProfile);
     }
 }

@@ -1,5 +1,6 @@
 using ProxySync.Core.Models;
 using ProxySync.Services;
+using Xunit;
 
 namespace ProxySync.Tests;
 

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ProxySync.Tests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a1770c68e67a977d8cfcd424c461a543da3d4345")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d223d77a6f13e600df68bfdef3f8757524e03b6d")]
 [assembly: System.Reflection.AssemblyProductAttribute("ProxySync.Tests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ProxySync.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

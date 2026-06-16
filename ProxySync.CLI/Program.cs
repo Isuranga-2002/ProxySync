@@ -7,9 +7,22 @@ using ProxySync.Services;
 // 1. Handle basic validations for args
 static void PrintUsage()
 {
-    Console.WriteLine("Usage: proxysync [on|off|sync|disable|set|profile|detect|auto-switch]");
-    Console.WriteLine("Profile commands: profile add <name> | profile list | profile switch <name>");
-    Console.WriteLine("Automation commands: on | off | detect | auto-switch");
+    Console.WriteLine("ProxySync");
+    Console.WriteLine();
+    Console.WriteLine("Usage:");
+    Console.WriteLine("  proxysync status");
+    Console.WriteLine("  proxysync on | off | sync | disable");
+    Console.WriteLine("  proxysync set");
+    Console.WriteLine("  proxysync profile add <name>");
+    Console.WriteLine("  proxysync profile list");
+    Console.WriteLine("  proxysync profile show [name]");
+    Console.WriteLine("  proxysync profile switch <name>");
+    Console.WriteLine("  proxysync detect | auto-switch");
+    Console.WriteLine();
+    Console.WriteLine("Examples:");
+    Console.WriteLine("  proxysync profile add hostel");
+    Console.WriteLine("  proxysync profile switch hostel");
+    Console.WriteLine("  proxysync status");
 }
 
 if (args.Length == 0)
@@ -57,6 +70,23 @@ try
         return p;
     }
 
+    static void PrintProfile(ProxyProfile profile, bool isActive)
+    {
+        Console.WriteLine(isActive ? $"Profile: {profile.Name} (active)" : $"Profile: {profile.Name}");
+        Console.WriteLine($"Host: {profile.Host}");
+        Console.WriteLine($"Port: {profile.Port}");
+        Console.WriteLine($"Network identifier: {profile.NetworkIdentifier ?? "(none)"}");
+    }
+
+    static void PrintLegacyConfig(ProxyConfig config)
+    {
+        Console.WriteLine("Legacy config:");
+        Console.WriteLine($"Host: {config.Host}");
+        Console.WriteLine($"Port: {config.Port}");
+        Console.WriteLine($"Username: {config.Username ?? "(none)"}");
+        Console.WriteLine($"Password: {(string.IsNullOrEmpty(config.Password) ? "(none)" : "(set)")}");
+    }
+
     switch (command)
     {
         case "profile":
@@ -64,7 +94,7 @@ try
             // profile subcommands: add <name>, list, switch <name>
             if (args.Length < 2)
             {
-                Console.WriteLine("Usage: proxysync profile [add|list|switch] [name]");
+                Console.WriteLine("Usage: proxysync profile [add|list|show|switch] [name]");
                 return;
             }
 
@@ -81,6 +111,30 @@ try
 
                     var name = args[2];
 
+                    if (string.IsNullOrWhiteSpace(name))
+                    {
+                        Console.WriteLine("Profile name is required.");
+                        Environment.ExitCode = 1;
+                        return;
+                    }
+
+                    if (name.IndexOfAny(new[] { System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar }) >= 0)
+                    {
+                        Console.WriteLine("Profile name contains invalid characters.");
+                        Environment.ExitCode = 1;
+                        return;
+                    }
+
+                    var existingConfig = await profileService.LoadAsync();
+                    if (existingConfig.Profiles != null &&
+                        existingConfig.Profiles.ContainsKey(name))
+                    {
+                        Console.WriteLine($"Profile '{name}' already exists.");
+                        Console.WriteLine($"Use 'proxysync profile show {name}' to inspect it or choose a different name.");
+                        Environment.ExitCode = 1;
+                        return;
+                    }
+
                     var hostInput = ReadHostFromConsole();
                     var portProfileNullable = ReadPortFromConsole();
                     if (!portProfileNullable.HasValue || portProfileNullable.Value <= 0)
@@ -94,22 +148,10 @@ try
                     Console.Write("Network identifier (optional): ");
                     var networkIdentifier = Console.ReadLine();
 
-                    // Validate inputs before attempting to add
-                    if (string.IsNullOrWhiteSpace(name))
-                    {
-                        Console.WriteLine("Profile name is required.");
-                        return;
-                    }
-
-                    if (name.IndexOfAny(new[] { System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar }) >= 0)
-                    {
-                        Console.WriteLine("Profile name contains invalid characters.");
-                        return;
-                    }
-
                     if (string.IsNullOrWhiteSpace(hostInput))
                     {
                         Console.WriteLine("Host is required.");
+                        Environment.ExitCode = 1;
                         return;
                     }
 
@@ -171,6 +213,36 @@ try
                     }
                     break;
 
+                case "show":
+                    try
+                    {
+                        var doc = await profileService.LoadAsync();
+                        var showName = args.Length >= 3 ? args[2] : doc.ActiveProfile;
+
+                        if (string.IsNullOrWhiteSpace(showName))
+                        {
+                            Console.WriteLine("No profile name provided and no active profile is set.");
+                            Console.WriteLine("Usage: proxysync profile show [name]");
+                            Environment.ExitCode = 1;
+                            return;
+                        }
+
+                        if (doc.Profiles == null || !doc.Profiles.TryGetValue(showName, out var profile))
+                        {
+                            Console.WriteLine($"Profile '{showName}' not found.");
+                            Environment.ExitCode = 1;
+                            return;
+                        }
+
+                        PrintProfile(profile, string.Equals(profile.Name, doc.ActiveProfile, StringComparison.OrdinalIgnoreCase));
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to show profile: {ex.Message}");
+                        Environment.ExitCode = 1;
+                    }
+                    break;
+
                 case "switch":
                     if (args.Length < 3)
                     {
@@ -195,7 +267,7 @@ try
                     break;
 
                 default:
-                    Console.WriteLine("Unknown profile command. Supported: add, list, switch");
+                    Console.WriteLine("Unknown profile command. Supported: add, list, show, switch");
                     break;
             }
 
@@ -264,6 +336,47 @@ try
             catch (Exception ex)
             {
                 Console.WriteLine($"Failed to auto-switch profile: {ex.Message}");
+                Environment.ExitCode = 1;
+            }
+
+            break;
+        }
+        case "status":
+        {
+            try
+            {
+                var doc = await profileService.LoadAsync();
+                var activeName = doc.ActiveProfile;
+
+                if (!string.IsNullOrWhiteSpace(activeName) &&
+                    doc.Profiles != null &&
+                    doc.Profiles.TryGetValue(activeName, out var activeProfile))
+                {
+                    PrintProfile(activeProfile, true);
+                }
+                else
+                {
+                    Console.WriteLine("Active profile: (none)");
+                }
+
+                Console.WriteLine();
+                Console.WriteLine($"Profiles stored: {doc.Profiles?.Count ?? 0}");
+
+                var configService = serviceProvider.GetRequiredService<ConfigService>();
+                var legacyConfig = configService.Load();
+                if (legacyConfig != null)
+                {
+                    Console.WriteLine();
+                    PrintLegacyConfig(legacyConfig);
+                }
+                else
+                {
+                    Console.WriteLine("Legacy config: (none)");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to read status: {ex.Message}");
                 Environment.ExitCode = 1;
             }
 

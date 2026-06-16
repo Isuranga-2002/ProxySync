@@ -170,6 +170,9 @@ public class ProfileService : IProfileService
         if (doc.Profiles == null)
             doc.Profiles = new Dictionary<string, ProxyProfile>(StringComparer.OrdinalIgnoreCase);
 
+        if (doc.Profiles.ContainsKey(name))
+            throw new ArgumentException($"Profile '{name}' already exists.", nameof(profile));
+
         doc.Profiles[name] = new ProxyProfile { Name = name, Host = profile.Host, Port = profile.Port };
         doc.Profiles[name].NetworkIdentifier = profile.NetworkIdentifier?.Trim();
 

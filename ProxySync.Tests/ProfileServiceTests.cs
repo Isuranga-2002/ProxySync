@@ -103,6 +103,32 @@ public class ProfileServiceTests
         }));
     }
 
+    [Fact]
+    public async Task AddProfileAsync_RejectsDuplicateProfileName()
+    {
+        var tempDirectory = CreateTempDirectory();
+        var configPath = Path.Combine(tempDirectory, "profiles.json");
+        var service = new ProfileService(configPath);
+
+        await service.AddProfileAsync(new ProxyProfile
+        {
+            Name = "hostel",
+            Host = "proxy.example.com",
+            Port = 3128
+        });
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.AddProfileAsync(new ProxyProfile
+        {
+            Name = "HOSTEL",
+            Host = "other-proxy.example.com",
+            Port = 8080
+        }));
+
+        var configuration = await service.LoadAsync();
+        Assert.Single(configuration.Profiles);
+        Assert.Equal("proxy.example.com", configuration.Profiles["hostel"].Host);
+    }
+
     private static string CreateTempDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "proxysync-tests", Guid.NewGuid().ToString("N"));

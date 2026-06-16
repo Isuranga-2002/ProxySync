@@ -5,12 +5,14 @@ ProxySync manages proxy configuration for the current user.
 ### Commands
 
 - `proxysync set` - create or update the legacy `config.json` configuration.
+- `proxysync status` - show the active profile and legacy configuration summary.
 - `proxysync sync` - applies the active profile when one exists, otherwise falls back to the legacy `config.json` workflow.
 - `proxysync disable` - clears proxy settings.
 - `proxysync on` - enables proxy settings from the active profile.
 - `proxysync off` - disables proxy settings without deleting profiles.
 - `proxysync profile add <name>` - create a named profile.
 - `proxysync profile list` - show all profiles and mark the active profile.
+- `proxysync profile show [name]` - show the selected profile, or the active profile when no name is provided.
 - `proxysync profile switch <name>` - make a profile active.
 - `proxysync detect` - detect the current network and suggest a matching profile.
 - `proxysync auto-switch` - detect the current network, switch profiles automatically, and synchronize proxy settings.
@@ -33,6 +35,8 @@ ProxySync manages proxy configuration for the current user.
 Profiles are stored in `%USERPROFILE%\.proxysync\profiles.json`.
 
 Each profile may optionally include a `networkIdentifier` value such as a gateway prefix or subnet prefix. The detection logic uses this identifier to find network matches.
+
+Use `proxysync profile show [name]` to inspect a profile from the CLI. Use `proxysync status` to see the active profile and whether a legacy `config.json` exists.
 
 If `profiles.json` is corrupted, ProxySync backs it up to a timestamped file such as:
 

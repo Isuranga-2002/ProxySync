@@ -36,4 +36,5 @@ public class SystemNetworkInformationProvider : INetworkInformationProvider
             }
 
             return Task.FromResult(new NetworkSnapshot(localIpAddress, defaultGatewayAddress));
+    }
 }

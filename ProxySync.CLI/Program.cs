@@ -81,6 +81,14 @@ try
 
                     var name = args[2];
 
+                    var existingConfig = await profileService.LoadAsync();
+                    if (existingConfig.Profiles != null &&
+                        existingConfig.Profiles.ContainsKey(name))
+                    {
+                        Console.WriteLine($"Profile '{name}' already exists.");
+                        return;
+                    }
+
                     var hostInput = ReadHostFromConsole();
                     var portProfileNullable = ReadPortFromConsole();
                     if (!portProfileNullable.HasValue || portProfileNullable.Value <= 0)
